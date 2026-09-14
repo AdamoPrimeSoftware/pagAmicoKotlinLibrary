@@ -1,6 +1,24 @@
 plugins {
     kotlin("jvm")
     application
+    `maven-publish`
+}
+
+// pacchetto Maven: gradle :pagamico-lib:publishToMavenLocal -> it.payprint:pagamico-lib:1.0.0 in ~/.m2
+java {
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            pom {
+                name.set("pagamico-lib")
+                description.set("Client TCP-IP per cassa rendiresto PayPrint pagAmico (protocollo rev. 2.33 / FW 8.72)")
+            }
+        }
+    }
 }
 
 dependencies {

@@ -25,6 +25,14 @@ Da riga di comando:
 
 Richiede JDK 17. Su Windows usare **JDK 17.0.18 o successivo**: le versioni precedenti non permettono di regolare il keepalive TCP, e una caduta di rete durante un incasso si vedrebbe solo dopo ore (la diagnostica lo segnala alla connessione).
 
+## Pacchetto Maven
+
+```bash
+./gradlew :pagamico-lib:publishToMavenLocal
+```
+
+Pubblica `it.payprint:pagamico-lib:1.0.0` (jar e sorgenti) in `~/.m2`. Da un altro progetto Gradle: `repositories { mavenLocal() }` e `implementation("it.payprint:pagamico-lib:1.0.0")`. Il jar contiene anche i test e il collaudo, che stanno in `src/main`.
+
 ## Uso
 
 ```kotlin
