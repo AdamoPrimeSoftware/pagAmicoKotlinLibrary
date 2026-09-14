@@ -1,0 +1,15 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+local.properties
