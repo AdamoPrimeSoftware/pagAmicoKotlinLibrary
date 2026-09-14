@@ -46,10 +46,12 @@ import kotlin.time.Duration.Companion.milliseconds
  * del pagAmico Dev Kit (sezione Simulatore -> Avvia).
  *
  * Esecuzione:
- *   gradle :pagamico-lib:run -PmainClass=it.payprint.pagamico.LiveTestKt --args="127.0.0.1 9100"
- *   gradle :pagamico-lib:run -PmainClass=it.payprint.pagamico.LiveTestKt --args="127.0.0.1 9100 base,cash,collect"
+ *   gradle :pagamico-lib:run -PmainClass=it.payprint.pagamico.test.LiveTestKt --args="127.0.0.1 9100"
+ *   gradle :pagamico-lib:run -PmainClass=it.payprint.pagamico.test.LiveTestKt --args="127.0.0.1 9100 base,cash,collect"
+ *   gradle :pagamico-lib:run -PmainClass=it.payprint.pagamico.test.LiveTestKt --args="127.0.0.1 9100 --terminatore cr --pausa 0"
  *
  * Gruppi: base, cash, collect, display, print, system, movimenti, di
+ * Opzioni: --terminatore nessuno|cr|crlf, --pausa <ms>
  */
 /**
  * Gruppi eseguiti quando non se ne indicano. Esclude "riavvii", che riavvia pagAmico e POS:
@@ -66,7 +68,22 @@ private val results = mutableListOf<Triple<String, Boolean, String>>()
 private lateinit var client: PagAmicoClient
 private var logger: PagAmicoFileLogger? = null
 
-fun main(args: Array<String>): Unit = runBlocking {
+fun main(rawArgs: Array<String>): Unit = runBlocking {
+    // Opzioni: --terminatore nessuno|cr|crlf  --pausa <ms>. Il resto sono argomenti posizionali.
+    var terminatorOption: String? = null
+    var intervalOption: Long? = null
+    val positional = mutableListOf<String>()
+    var i = 0
+    while (i < rawArgs.size) {
+        when {
+            rawArgs[i] == "--terminatore" && i + 1 < rawArgs.size -> terminatorOption = rawArgs[++i]
+            rawArgs[i] == "--pausa" && rawArgs.getOrNull(i + 1)?.toLongOrNull() != null -> intervalOption = rawArgs[++i].toLong()
+            else -> positional += rawArgs[i]
+        }
+        i++
+    }
+    val args = positional.toTypedArray()
+
     val host = args.getOrNull(0) ?: "127.0.0.1"
     val port = args.getOrNull(1)?.toIntOrNull() ?: PagAmicoClient.DEFAULT_PORT
     val groups = (args.getOrNull(2) ?: DEFAULT_GROUPS)
@@ -75,7 +92,16 @@ fun main(args: Array<String>): Unit = runBlocking {
     println("Collaudo pagAmico su $host:$port  [gruppi: ${groups.joinToString(", ")}]")
     println("=".repeat(100))
 
-    client = PagAmicoClient(host, port)
+    client = when (terminatorOption?.lowercase()) {
+        null -> PagAmicoClient(host, port)
+        "cr" -> PagAmicoClient(host, port, commandTerminator = "\r")
+        "crlf" -> PagAmicoClient(host, port, commandTerminator = "\r\n")
+        else -> PagAmicoClient(host, port, commandTerminator = "")
+    }
+    val terminator = client.commandTerminator
+    intervalOption?.let { client.minimumCommandIntervalMs = it }
+    println("Terminatore: ${when (terminator) { "" -> "nessuno"; "\r" -> "CR"; else -> "CR+LF" }}, " +
+            "pausa minima fra invii: ${client.minimumCommandIntervalMs} ms")
     client.onCommandSent = { cmd -> println("    TX > $cmd") }
     client.onDisconnected = { ex -> println("    !! disconnesso: ${ex?.message ?: "chiusura richiesta"}") }
 

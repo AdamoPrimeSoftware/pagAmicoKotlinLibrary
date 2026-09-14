@@ -489,8 +489,8 @@ private suspend fun defaultPauseBetweenCommands() = session(defaults = true) { s
         "pausa di default: due invii consecutivi arrivano ad almeno 70 ms"
     )
     check(
-        segments.size == 2 && String(segments[1].second, Charsets.UTF_8) == "DS",
-        "senza terminatore ogni comando arriva nel suo segmento"
+        segments.size == 2 && String(segments[1].second, Charsets.UTF_8) == "DS\r",
+        "default: ogni comando arriva nel suo segmento, chiuso da CR"
     )
 }
 
@@ -540,13 +540,13 @@ private suspend fun waitUntil(ms: Long = 3_000, condition: () -> Boolean) {
 
 /**
  * Apre un finto pagAmico e un client connesso; li chiude alla fine del caso.
- * [defaults]: configurazione di default della libreria (niente terminatore, pausa di 80 ms).
+ * [defaults]: configurazione di default della libreria (terminatore CR, pausa di 80 ms).
  */
 private suspend fun session(defaults: Boolean = false, terminator: String? = null, body: suspend (Session) -> Unit) {
     val fake = FakePagAmico()
     // il terminatore serve solo al finto pagAmico per separare i comandi
     val client = if (defaults) {
-        PagAmicoClient("127.0.0.1", fake.port, commandTerminator = terminator ?: "")
+        PagAmicoClient("127.0.0.1", fake.port, commandTerminator = terminator ?: "\r")
     } else {
         PagAmicoClient("127.0.0.1", fake.port, commandTerminator = "\r", minimumCommandIntervalMs = 0)
     }
