@@ -12,6 +12,7 @@ import it.payprint.pagamico.display.KeyboardLayout
 import it.payprint.pagamico.display.KeyboardMode
 import it.payprint.pagamico.display.PagAmicoDisplay
 import it.payprint.pagamico.exceptions.PagAmicoBusyException
+import it.payprint.pagamico.exceptions.PagAmicoCollectionCancelledException
 import it.payprint.pagamico.exceptions.PagAmicoCollectionOpenException
 import it.payprint.pagamico.exceptions.PagAmicoConnectionLostException
 import it.payprint.pagamico.exceptions.PagAmicoException
@@ -609,7 +610,8 @@ class PagAmicoClient(
      * prima di accettarlo, [PagAmicoConnectionLostException] se la connessione cade.
      *
      * La cancellazione della coroutine invia [AN] al pagAmico (dopo l'OK, se l'incasso non e' ancora
-     * accettato) e si propaga subito al chiamante: l'esito dell'incasso annullato arriva a [onOrphanFrame].
+     * accettato) e si propaga subito al chiamante come [PagAmicoCollectionCancelledException], che porta
+     * l'esito dell'incasso in `outcome`. L'esito arriva anche a [onOrphanFrame].
      * A [onPartial] arrivano solo i parziali [p], in ordine.
      */
     suspend fun collectCash(
@@ -687,10 +689,12 @@ class PagAmicoClient(
                     // cancellato lo scope del client (disconnect), non il chiamante
                     throw PagAmicoConnectionLostException("Connessione chiusa durante l'incasso '$command'", c.accepted)
                 }
-                // cancellato il chiamante: annullo lato macchina; l'esito arrivera' a onOrphanFrame
+                // cancellato il chiamante: annullo lato macchina; l'esito viaggia con l'eccezione
+                // e arriva anche a onOrphanFrame
                 synchronized(gate) { c.detached = true }
                 clientScope.launch { cancelFromCaller(c) }
-                throw e
+                val outcome = clientScope.async { requireJson(c.outcome.await(), command) }
+                throw PagAmicoCollectionCancelledException(command, outcome).apply { initCause(e) }
             }
         }
 

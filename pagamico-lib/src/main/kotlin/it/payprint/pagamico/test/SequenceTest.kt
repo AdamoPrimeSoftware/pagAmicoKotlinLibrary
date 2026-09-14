@@ -5,11 +5,13 @@ import it.payprint.pagamico.client.PagAmicoClient
 import it.payprint.pagamico.client.PagAmicoFrame
 import it.payprint.pagamico.commands.CashFloatTarget
 import it.payprint.pagamico.exceptions.PagAmicoBusyException
+import it.payprint.pagamico.exceptions.PagAmicoCollectionCancelledException
 import it.payprint.pagamico.exceptions.PagAmicoCollectionOpenException
 import it.payprint.pagamico.exceptions.PagAmicoConnectionLostException
 import it.payprint.pagamico.exceptions.PagAmicoException
 import it.payprint.pagamico.exceptions.PagAmicoRejectedException
 import it.payprint.pagamico.exceptions.PagAmicoTimeoutException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +40,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * Nessuna macchina, nessun simulatore. Gemello di SequenceTests.cs: stessi casi, stessi nomi.
  *
  * Una differenza voluta, ed e' la divergenza nota sull'annullo: in C# il chiamante che annulla riceve
- * l'esito; in Kotlin la cancellazione si propaga subito e l'esito arriva a onOrphanFrame.
+ * l'esito; in Kotlin la cancellazione si propaga subito come PagAmicoCollectionCancelledException, che
+ * porta l'esito in outcome, e l'esito arriva anche a onOrphanFrame.
  */
 
 // frame usati dai casi: le sequenze sono quelle del log del simulatore del 2/9 e del manuale 2.33
@@ -239,7 +242,15 @@ private suspend fun singleClosing() = session { s ->
 }
 
 private suspend fun cancelByCaller() = session { s ->
-    val collect = s.async { s.client.collectCash(EIGHTY) }
+    val cancelled = CompletableDeferred<PagAmicoCollectionCancelledException>()
+    val collect = s.async {
+        try {
+            s.client.collectCash(EIGHTY)
+        } catch (e: PagAmicoCollectionCancelledException) {
+            cancelled.complete(e)
+            throw e
+        }
+    }
     s.fake.expect("IN008000")
     s.fake.json(OK)
     waitUntil { s.client.isCollecting }
@@ -253,6 +264,11 @@ private suspend fun cancelByCaller() = session { s ->
     check(
         s.orphans.any { it.response == "AN" && it.json?.changeReturn?.compareTo(BigDecimal("30")) == 0 },
         "annullo del chiamante: esito AN consegnato"
+    )
+    val outcome = withTimeout(3_000) { cancelled.await().outcome.await() }
+    check(
+        outcome.response == "AN" && outcome.changeReturn?.compareTo(BigDecimal("30")) == 0,
+        "annullo del chiamante: l'esito AN viaggia anche con l'eccezione di cancellazione"
     )
 }
 

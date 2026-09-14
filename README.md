@@ -47,4 +47,16 @@ Su Android il keepalive TCP resta ai valori di sistema. Su Android: `minSdk 26` 
 
 ## Attenzione all'annullo
 
-Cancellando la coroutine di un incasso, il client manda `AN` alla macchina, ma l'esito **non** torna al chiamante (che riceve subito `CancellationException`): arriva a `onOrphanFrame`. Per ricevere l'esito dell'annullo usare `cancelOperation()`, oppure ascoltare `onOrphanFrame`.
+Cancellando la coroutine di un incasso, il client manda `AN` alla macchina, ma la macchina può aver già incassato. Il chiamante riceve subito una `PagAmicoCollectionCancelledException` (sottotipo di `CancellationException`) che **porta l'esito in `outcome`**:
+
+```kotlin
+try {
+    client.collectCash(importo)
+} catch (e: PagAmicoCollectionCancelledException) {
+    val esito = withContext(NonCancellable) { e.outcome.await() }   // AN, o IN/CM se chiuso prima
+    salva(esito)
+    throw e
+}
+```
+
+In alternativa si annulla con `cancelOperation()`, che restituisce direttamente l'esito. L'esito arriva comunque anche a `onOrphanFrame`: chi salva da entrambe le parti deve evitare il doppio salvataggio.
