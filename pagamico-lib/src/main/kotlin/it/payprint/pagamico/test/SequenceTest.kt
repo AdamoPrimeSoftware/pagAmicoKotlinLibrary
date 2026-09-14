@@ -535,7 +535,7 @@ private suspend fun keepAliveConfigured() {
     }
 }
 
-/** Vero se la JVM permette di regolare il keepalive (su Windows da JDK 17.0.18; mai su Android). */
+/** Vero se la JVM permette di regolare il keepalive (su Windows sì con JDK 17.0.14 e 17.0.20, no con 17.0.8; mai su Android). */
 private fun keepAliveTunable(): Boolean = try {
     val idle = Class.forName("jdk.net.ExtendedSocketOptions").getField("TCP_KEEPIDLE").get(null)
     Socket().use { idle in it.supportedOptions() }

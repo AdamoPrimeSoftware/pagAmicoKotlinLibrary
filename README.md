@@ -2,7 +2,7 @@
 
 Libreria client (JVM/Android) per la cassa rendiresto **PayPrint pagAmico** (protocollo TCP-IP rev. 2.33, FW 8.72). Usa coroutines e kotlinx-serialization, nessuna dipendenza da UI.
 
-Il modulo `pagamico-lib` contiene la libreria, i 168 test offline di autoverifica e il collaudo contro simulatore o macchina reale. Il banco di prova Compose sta nel repository **pagAmico_Kotlin_Demo**.
+Il modulo `pagamico-lib` contiene la libreria, i 171 test offline di autoverifica e il collaudo contro simulatore o macchina reale. Il banco di prova Compose sta nel repository **pagAmico_Kotlin_Demo**.
 
 ## Compilare e testare
 
@@ -10,7 +10,7 @@ Aprire la cartella in IntelliJ IDEA; le configurazioni salvate in `.run/` sono n
 
 | Configurazione | Cosa fa |
 |---|---|
-| **1 - Test offline (168)** | test di autoverifica |
+| **1 - Test offline** | 171 test di autoverifica |
 | **2 - Collaudo simulatore** | collaudo su `127.0.0.1:9100` (pagAmico Dev Kit → Simulatore → Avvia) |
 | **4 - Collaudo macchina reale** | collaudo su `192.168.1.231:9100` |
 
@@ -23,7 +23,9 @@ Da riga di comando:
 ./gradlew :pagamico-lib:run "-PmainClass=it.payprint.pagamico.test.LiveTestKt" "--args=127.0.0.1 9100"
 ```
 
-Richiede JDK 17. Su Windows usare **JDK 17.0.18 o successivo**: le versioni precedenti non permettono di regolare il keepalive TCP, e una caduta di rete durante un incasso si vedrebbe solo dopo ore (la diagnostica lo segnala alla connessione).
+Richiede JDK 17 aggiornato. Su Windows la regolazione del keepalive TCP è verificata con **17.0.14 e 17.0.20**; il 17.0.8 non la permette, e una caduta di rete durante un incasso si vedrebbe solo dopo ore (la diagnostica lo segnala alla connessione).
+
+Il JDK di Gradle si fissa per PC in `%USERPROFILE%\.gradle\gradle.properties` (non nel repository, il percorso cambia da un PC all'altro), per esempio `org.gradle.java.home=C:\\Users\\adamo\\.jdks\\ms-17.0.20.1`; in IntelliJ, *Gradle JVM* sullo stesso JDK.
 
 ## Pacchetto Maven
 
