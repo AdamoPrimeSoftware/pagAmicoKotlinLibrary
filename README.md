@@ -17,8 +17,9 @@ Aprire la cartella in IntelliJ IDEA; le configurazioni salvate in `.run/` sono n
 Da riga di comando:
 
 ```bash
-./gradlew build
-./gradlew :pagamico-lib:run
+./gradlew build                  # compila ed esegue i test offline
+./gradlew test                   # solo i test offline (task selfTest)
+./gradlew :pagamico-lib:run      # stessi test, con l'elenco completo a video
 ./gradlew :pagamico-lib:run "-PmainClass=it.payprint.pagamico.test.LiveTestKt" "--args=127.0.0.1 9100"
 ```
 

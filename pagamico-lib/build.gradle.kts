@@ -18,6 +18,19 @@ application {
     mainClass.set(providers.gradleProperty("mainClass").getOrElse("it.payprint.pagamico.test.SelfTestKt"))
 }
 
+// gradle test (e quindi gradle build) esegue i test offline: la build fallisce se anche uno non passa
+val selfTest = tasks.register<JavaExec>("selfTest") {
+    group = "verification"
+    description = "Esegue i test offline di autoverifica (SelfTest)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("it.payprint.pagamico.test.SelfTestKt")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) })
+}
+
+tasks.named("test") {
+    dependsOn(selfTest)
+}
+
 /*
  * NOTE PER ANDROID / KMP
  * ----------------------
