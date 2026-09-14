@@ -15,7 +15,7 @@ kotlin {
 application {
     // gradle :pagamico-lib:run                      -> test di autoverifica offline
     // gradle :pagamico-lib:run -PmainClass=...DemoKt -> demo contro una macchina reale
-    mainClass.set(providers.gradleProperty("mainClass").getOrElse("it.payprint.pagamico.SelfTestKt"))
+    mainClass.set(providers.gradleProperty("mainClass").getOrElse("it.payprint.pagamico.test.SelfTestKt"))
 }
 
 /*

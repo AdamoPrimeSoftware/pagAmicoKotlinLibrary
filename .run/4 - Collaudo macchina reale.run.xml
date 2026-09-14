@@ -4,7 +4,7 @@
       <option name="executionName" />
       <option name="externalProjectPath" value="$PROJECT_DIR$" />
       <option name="externalSystemIdString" value="GRADLE" />
-      <option name="scriptParameters" value="-PmainClass=it.payprint.pagamico.LiveTestKt --args=&quot;192.168.1.231 9100&quot;" />
+      <option name="scriptParameters" value="-PmainClass=it.payprint.pagamico.test.LiveTestKt --args=&quot;192.168.1.231 9100&quot;" />
       <option name="taskDescriptions">
         <list />
       </option>
