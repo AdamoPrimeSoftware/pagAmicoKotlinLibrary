@@ -22,7 +22,7 @@ Da riga di comando:
 ./gradlew :pagamico-lib:run "-PmainClass=it.payprint.pagamico.test.LiveTestKt" "--args=127.0.0.1 9100"
 ```
 
-Richiede JDK 17.
+Richiede JDK 17. Su Windows usare **JDK 17.0.18 o successivo**: le versioni precedenti non permettono di regolare il keepalive TCP, e una caduta di rete durante un incasso si vedrebbe solo dopo ore (la diagnostica lo segnala alla connessione).
 
 ## Uso
 
@@ -43,7 +43,7 @@ val logger = PagAmicoFileLogger()               // su Android passare context.fi
 logger.attach(client, scope)
 ```
 
-Su Android: `minSdk 26` (per `java.time`) oppure core library desugaring, permesso `INTERNET` e `kotlinx-coroutines-android`. Non serve il plugin kotlinx-serialization.
+Su Android il keepalive TCP resta ai valori di sistema. Su Android: `minSdk 26` (per `java.time`) oppure core library desugaring, permesso `INTERNET` e `kotlinx-coroutines-android`. Non serve il plugin kotlinx-serialization.
 
 ## Attenzione all'annullo
 

@@ -94,6 +94,7 @@ internal fun sequenceTests() {
         lastJsonAcceptsAnything()
         defaultPauseBetweenCommands()
         terminatorAppended()
+        keepAliveConfigured()
         imagePackets()
     }
 }
@@ -492,6 +493,38 @@ private suspend fun defaultPauseBetweenCommands() = session(defaults = true) { s
         segments.size == 2 && String(segments[1].second, Charsets.UTF_8) == "DS\r",
         "default: ogni comando arriva nel suo segmento, chiuso da CR"
     )
+}
+
+private suspend fun keepAliveConfigured() {
+    val fake = FakePagAmico()
+    val client = PagAmicoClient("127.0.0.1", fake.port).apply {
+        keepAliveTimeSec = 7
+        keepAliveIntervalSec = 3
+        keepAliveRetryCount = 4
+    }
+    val trace = Collections.synchronizedList(mutableListOf<String>())
+    client.onTrace = { trace += it }
+    try {
+        client.connect()
+        fake.waitConnected()
+        val lines = synchronized(trace) { trace.toList() }
+        check(
+            if (keepAliveTunable()) lines.any { it.contains("prima sonda dopo 7 s, poi ogni 3 s") && it.contains("4 sonde") }
+            else lines.any { it.contains("keepalive TCP con i valori di sistema") },
+            "keepalive TCP regolato alla connessione (7 s, ogni 3 s, 4 sonde), o avviso se la JVM non lo permette"
+        )
+    } finally {
+        client.disconnect()
+        fake.close()
+    }
+}
+
+/** Vero se la JVM permette di regolare il keepalive (su Windows da JDK 17.0.18; mai su Android). */
+private fun keepAliveTunable(): Boolean = try {
+    val idle = Class.forName("jdk.net.ExtendedSocketOptions").getField("TCP_KEEPIDLE").get(null)
+    Socket().use { idle in it.supportedOptions() }
+} catch (e: ReflectiveOperationException) {
+    false
 }
 
 private suspend fun terminatorAppended() = session(defaults = true, terminator = "\r\n") { s ->

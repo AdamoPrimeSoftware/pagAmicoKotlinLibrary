@@ -116,6 +116,19 @@ class PagAmicoClient(
 
     var imageLayout: ImagePacketLayout = ImagePacketLayout.DOCUMENTED
 
+    /**
+     * Secondi di silenzio dopo i quali parte la prima sonda keepalive TCP. Durante un incasso non si
+     * puo' mandare [ST]: il keepalive e' l'unico modo di accorgersi che la macchina non e' piu'
+     * raggiungibile. Il default di sistema e' 2 ore. Si applica alla connessione successiva.
+     */
+    var keepAliveTimeSec: Int = 10
+
+    /** Secondi fra due sonde keepalive senza risposta. Si applica alla connessione successiva. */
+    var keepAliveIntervalSec: Int = 2
+
+    /** Sonde senza risposta prima di dichiarare caduta la connessione. Si applica alla connessione successiva. */
+    var keepAliveRetryCount: Int = 5
+
     private val parser = PagAmicoFrameParser()
     private val writeMutex = Mutex()
     private val commandMutex = Mutex()
@@ -176,7 +189,7 @@ class PagAmicoClient(
 
         val s = Socket()
         s.tcpNoDelay = true
-        s.keepAlive = true
+        configureKeepAlive(s)
         s.connect(InetSocketAddress(host, port), connectTimeoutMs)
         s.soTimeout = pollIntervalMs
 
@@ -193,6 +206,40 @@ class PagAmicoClient(
             "connesso a $host:$port (pausa minima fra invii $minimumCommandIntervalMs ms, " +
                 "terminatore ${if (commandTerminator.isEmpty()) "nessuno" else "presente"})"
         )
+    }
+
+    /**
+     * Accende il keepalive e ne regola i tempi con jdk.net.ExtendedSocketOptions, letto per riflessione:
+     * su Android la classe non esiste e restano i valori di sistema.
+     */
+    private fun configureKeepAlive(s: Socket) {
+        s.keepAlive = true
+        val time = keepAliveTimeSec.coerceAtLeast(1)
+        val interval = keepAliveIntervalSec.coerceAtLeast(1)
+        val count = keepAliveRetryCount.coerceAtLeast(1)
+        try {
+            val options = Class.forName("jdk.net.ExtendedSocketOptions")
+            @Suppress("UNCHECKED_CAST")
+            fun option(name: String) = options.getField(name).get(null) as java.net.SocketOption<Int>
+            val idle = option("TCP_KEEPIDLE")
+            val intervalOption = option("TCP_KEEPINTERVAL")
+            val countOption = option("TCP_KEEPCOUNT")
+            val supported = s.supportedOptions()
+            if (idle !in supported || intervalOption !in supported || countOption !in supported) {
+                trace("keepalive TCP con i valori di sistema: regolazione non supportata su questa JVM")
+                return
+            }
+            s.setOption(idle, time)
+            s.setOption(intervalOption, interval)
+            s.setOption(countOption, count)
+            trace("keepalive TCP: prima sonda dopo $time s, poi ogni $interval s, caduta dopo $count sonde senza risposta")
+        } catch (e: ReflectiveOperationException) {
+            trace("keepalive TCP con i valori di sistema: regolazione non disponibile (${e.javaClass.simpleName})")
+        } catch (e: java.io.IOException) {
+            trace("keepalive TCP con i valori di sistema: regolazione rifiutata (${e.message})")
+        } catch (e: UnsupportedOperationException) {
+            trace("keepalive TCP con i valori di sistema: regolazione non supportata (${e.message})")
+        }
     }
 
     fun disconnect() {
