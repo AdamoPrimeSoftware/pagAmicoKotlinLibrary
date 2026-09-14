@@ -6,11 +6,10 @@ import kotlinx.coroutines.launch
 import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
-import java.io.OutputStreamWriter
-import java.io.Writer
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Registra su file tutto il traffico con il pagAmico: comandi trasmessi, risposte ricevute
@@ -45,7 +44,7 @@ class PagAmicoFileLogger(
     var onLineWritten: ((String) -> Unit)? = null
 
     private val lock = Any()
-    private var writer: Writer? = null
+    private var stream: FileOutputStream? = null
     private var openDate: LocalDate? = null
     private var closed = false
     private var attachedJob: Job? = null
@@ -84,12 +83,17 @@ class PagAmicoFileLogger(
 
         val line = "${clock().format(TIME_FORMAT)}  ${kind.padEnd(2)}  ${sanitize(text)}"
 
+        val bytes = (line + System.lineSeparator()).toByteArray(Charsets.UTF_8)
         synchronized(lock) {
             runCatching {
-                ensureWriter()
-                writer?.write(line)
-                writer?.write(System.lineSeparator())
-                writer?.flush()
+                ensureStream()
+                val out = stream ?: return@runCatching
+                // Esclusione fra processi, come il mutex con nome in C#: un lock del sistema operativo sul
+                // file, preso per ogni riga. Dentro la JVM prima si serializza per percorso: due FileLock
+                // dello stesso processo sullo stesso file lancerebbero OverlappingFileLockException.
+                synchronized(pathLock(currentFile)) {
+                    out.channel.lock().use { out.write(bytes) }
+                }
             }
             // un log che non riesce a scrivere non deve mai fermare l'incasso in corso
         }
@@ -118,13 +122,13 @@ class PagAmicoFileLogger(
         }
     }
 
-    private fun ensureWriter() {
+    private fun ensureStream() {
         val today = clock().toLocalDate()
-        if (writer != null && openDate == today) return
+        if (stream != null && openDate == today) return
 
-        writer?.runCatching { flush(); close() }
+        stream?.runCatching { close() }
         logDirectory.mkdirs()
-        writer = OutputStreamWriter(FileOutputStream(currentFile, true), Charsets.UTF_8)
+        stream = FileOutputStream(currentFile, true)
         openDate = today
     }
 
@@ -133,13 +137,17 @@ class PagAmicoFileLogger(
         detach()
         synchronized(lock) {
             closed = true
-            writer?.runCatching { flush(); close() }
-            writer = null
+            stream?.runCatching { close() }
+            stream = null
         }
     }
 
     companion object {
         private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+
+        private val pathLocks = ConcurrentHashMap<String, Any>()
+
+        private fun pathLock(file: File): Any = pathLocks.computeIfAbsent(file.absoluteFile.normalize().path) { Any() }
 
         /** Su Windows %LOCALAPPDATA%\PayPrint.PagAmico\logs, altrimenti ~/.payprint-pagamico/logs */
         val defaultDirectory: File

@@ -12,7 +12,9 @@ import it.payprint.pagamico.display.PagAmicoDisplay
 import it.payprint.pagamico.response.PagAmicoResponse
 import java.io.File
 import java.nio.file.Files
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
@@ -24,6 +26,7 @@ internal fun loggerAndErrorTests() {
     val dir = Files.createTempDirectory("pagamico-test-").toFile()
     try {
         concurrentWriters(dir)
+        crossProcessWriters(dir)
         dayChange(dir)
         writersStartedOnDifferentDays(dir)
         sanitize(dir)
@@ -37,13 +40,10 @@ internal fun loggerAndErrorTests() {
 
 // ---------------------------------------------------------------- registro su file
 
-private val WELL_FORMED = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}  TX  [AB]-\d+$""")
+private val WELL_FORMED = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}  TX  [ABCD]-\d+$""")
 private const val PER_WRITER = 500
 
-/**
- * Due logger distinti sullo stesso file, come due processi. In Kotlin non c'e' esclusione fra processi:
- * questo caso dice se basta l'append del sistema operativo (FileOutputStream in append).
- */
+/** Due logger distinti sullo stesso file, da due thread dello stesso processo. */
 private fun concurrentWriters(dir: File) {
     val a = PagAmicoFileLogger(dir, "concorrenza")
     val b = PagAmicoFileLogger(dir, "concorrenza")
@@ -54,6 +54,29 @@ private fun concurrentWriters(dir: File) {
     check(
         lines.size == 2 * PER_WRITER && lines.all { WELL_FORMED.matches(it) },
         "due logger sullo stesso file da due thread: 1000 righe intatte"
+    )
+}
+
+/**
+ * Tre processi veri sullo stesso file: questo e due JVM figlie. Il lock sul file (FileChannel.lock)
+ * deve tenere intere tutte le righe, come il mutex con nome in C#.
+ */
+private fun crossProcessWriters(dir: File) {
+    val java = File(File(System.getProperty("java.home"), "bin"), "java").path
+    val classpath = System.getProperty("java.class.path")
+    val children = listOf("C", "D").map { label ->
+        ProcessBuilder(java, "-cp", classpath, "it.payprint.pagamico.test.LoggerWriterProcessKt",
+            dir.path, "processi", label, PER_WRITER.toString())
+            .redirectErrorStream(true)
+            .start()
+    }
+    PagAmicoFileLogger(dir, "processi").use { log -> repeat(PER_WRITER) { log.write("TX", "A-$it") } }
+    val exited = children.all { it.waitFor(60, TimeUnit.SECONDS) && it.exitValue() == 0 }
+
+    val lines = File(dir, "processi-${LocalDate.now()}.log").readLines().filter { it.isNotEmpty() }
+    check(
+        exited && lines.size == 3 * PER_WRITER && lines.all { WELL_FORMED.matches(it) },
+        "tre processi sullo stesso file: 1500 righe intatte"
     )
 }
 
