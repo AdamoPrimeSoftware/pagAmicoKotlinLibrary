@@ -2,7 +2,7 @@
 
 Libreria client (JVM/Android) per la cassa rendiresto **PayPrint pagAmico** (protocollo TCP-IP rev. 2.33, FW 8.72). Usa coroutines e kotlinx-serialization, nessuna dipendenza da UI.
 
-Il modulo `pagamico-lib` contiene la libreria, i 171 test offline di autoverifica e il collaudo contro simulatore o macchina reale. Il banco di prova Compose sta nel repository **pagAmico_Kotlin_Demo**.
+Il modulo `pagamico-lib` contiene la libreria, i 172 test offline di autoverifica e il collaudo contro simulatore o macchina reale. Il banco di prova Compose sta nel repository **pagAmico_Kotlin_Demo**.
 
 ## Compilare e testare
 
@@ -10,7 +10,7 @@ Aprire la cartella in IntelliJ IDEA; le configurazioni salvate in `.run/` sono n
 
 | Configurazione | Cosa fa |
 |---|---|
-| **1 - Test offline** | 171 test di autoverifica |
+| **1 - Test offline** | 172 test di autoverifica |
 | **2 - Collaudo simulatore** | collaudo su `127.0.0.1:9100` (pagAmico Dev Kit → Simulatore → Avvia) |
 | **4 - Collaudo macchina reale** | collaudo su `192.168.1.231:9100` |
 
