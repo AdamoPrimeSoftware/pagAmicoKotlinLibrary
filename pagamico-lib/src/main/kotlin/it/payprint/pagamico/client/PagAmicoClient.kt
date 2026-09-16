@@ -280,12 +280,19 @@ class PagAmicoClient(
     suspend fun sendRaw(payload: ByteArray) = write(payload, "(invio binario)", duringCollection = false)
 
     private suspend fun sendCommand(command: String, duringCollection: Boolean) {
-        write((command + commandTerminator).toByteArray(charset), command, duringCollection)
-        onCommandSent?.invoke(command)
+        write((command + commandTerminator).toByteArray(charset), command, duringCollection) {
+            onCommandSent?.invoke(command)
+        }
     }
 
     // duringCollection: vero solo per l'[IN] stesso e per l'[AN] / [CM] che lo chiudono
-    private suspend fun write(payload: ByteArray, what: String, duringCollection: Boolean) = withContext(ioDispatcher) {
+    // onSending: notifica del traffico in uscita, chiamata sotto il lock appena prima dei byte
+    private suspend fun write(
+        payload: ByteArray,
+        what: String,
+        duringCollection: Boolean,
+        onSending: (() -> Unit)? = null,
+    ) = withContext(ioDispatcher) {
         val out = output ?: throw PagAmicoException("Client non connesso: chiamare connect()")
         if (!duringCollection) throwIfCollecting(what)
         writeMutex.withLock {
@@ -300,6 +307,9 @@ class PagAmicoClient(
                 delay(wait)
             }
 
+            // la notifica esce prima dei byte: altrimenti su una rete veloce la risposta puo' essere
+            // registrata prima del comando che l'ha provocata, e il log diventa illeggibile
+            onSending?.invoke()
             out.write(payload)
             out.flush()
             lastSentAt = System.currentTimeMillis()
@@ -1088,16 +1098,16 @@ class PagAmicoClient(
     // ------------------------------------------------------------------ immagini
 
     /** [SF] Invia il logo permanente (PNG, area 571x520 dip). */
-    suspend fun sendLogo(pngBytes: ByteArray) {
-        sendRaw(buildImagePacket("SF", pngBytes))
-        onCommandSent?.invoke("[SF] payload binario di ${pngBytes.size} byte")
-    }
+    suspend fun sendLogo(pngBytes: ByteArray) = sendImagePacket("SF", pngBytes)
 
     /** [SI] Invia un'immagine temporanea (PNG/JPG/BMP) che sostituisce il logo fino alla rimozione. */
-    suspend fun sendTemporaryImage(imageBytes: ByteArray) {
-        sendRaw(buildImagePacket("SI", imageBytes))
-        onCommandSent?.invoke("[SI] payload binario di ${imageBytes.size} byte")
-    }
+    suspend fun sendTemporaryImage(imageBytes: ByteArray) = sendImagePacket("SI", imageBytes)
+
+    /** Invia un pacchetto immagine, notificando il traffico in uscita prima dei byte. */
+    private suspend fun sendImagePacket(prefix: String, imageBytes: ByteArray) =
+        write(buildImagePacket(prefix, imageBytes), "(invio binario)", duringCollection = false) {
+            onCommandSent?.invoke("[$prefix] payload binario di ${imageBytes.size} byte")
+        }
 
     /** [SR] Rimuove l'immagine temporanea e ripristina il logo. */
     suspend fun removeTemporaryImage() = sendRaw(PagAmicoCommands.removeTempImage())

@@ -19,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.ByteArrayOutputStream
@@ -99,6 +100,7 @@ internal fun sequenceTests() {
         terminatorAppended()
         keepAliveConfigured()
         imagePackets()
+        commandNotifiedBeforeResponse()
     }
 }
 
@@ -546,6 +548,30 @@ private fun keepAliveTunable(): Boolean = try {
 private suspend fun terminatorAppended() = session(defaults = true, terminator = "\r\n") { s ->
     s.client.clearDisplay()
     check(String(s.fake.takeBytes(4), Charsets.US_ASCII) == "CL\r\n", "terminatore CR+LF accodato al comando")
+}
+
+/**
+ * La notifica del comando esce prima dei byte: nel log la riga del comando precede sempre quella
+ * della risposta. Prima della correzione del 16/09 la notifica arrivava dopo la scrittura, e su
+ * 127.0.0.1 la risposta veniva registrata per prima.
+ */
+private suspend fun commandNotifiedBeforeResponse() = session { s ->
+    val order = Collections.synchronizedList(mutableListOf<String>())
+    s.client.onCommandSent = { order += "TX $it" }
+    val collector = s.launch { s.client.frames.collect { order += "RX ${it.raw}" } }
+    delay(100)     // il flusso dei frame non ha replay: si aspetta che il collettore sia attivo
+
+    val status = s.async { s.client.status() }
+    s.fake.expect("ST")
+    s.fake.json(ST_FINAL)
+    within(status)
+    collector.cancel()
+
+    val seen = order.toList()
+    check(
+        seen.size >= 2 && seen[0] == "TX ST" && seen[1].startsWith("RX "),
+        "il comando e' notificato prima della risposta: nel log la riga TX precede la RX"
+    )
 }
 
 private suspend fun imagePackets() = session(defaults = true) { s ->
